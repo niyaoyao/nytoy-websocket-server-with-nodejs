@@ -30,7 +30,20 @@ wss.on('connection', function (socket) {
 
 	socket.on('message', function (message) {
 		// body...
-		console.log('recieve:' + message);
+		console.log('recieve:' + message + '[' + typeof message + ']');
+
+		var msg = {};
+		try {
+    			msg = JSON.parse(message);
+  	} catch(e) {
+   		// var addr = ws._socket.address();
+    	msg = message;
+    	console.log('bad websocket message datatype:' + typeof message);
+ 		}
+
+		console.log('msg.content:' + msg.content + '[' + typeof msg + ']');
+		console.log('msg[\'content\']:' + msg['content'] + '[' + typeof msg + ']');
+
 	});
 
 
