@@ -19,14 +19,27 @@ server.listen(port);
 console.log('server start');
 
 var wss = new WebSocket.Server({server: server});
-wss.on('connection', function (socket) {
-	console.log('connection open');
+
+wss.broadcast = function broadcast(data) {
+	// body...
+	wss.cliens.forEach(function each(client) {
+		// body...
+		if (client.readyState === WebSocket.OPEN ) {
+			client.send(JSON.stringify(data));
+		}
+	});
+}
+
+wss.on('connection', function (socket, request) {
 	// body...
 	// var id = setInterval(function () {
 	// 	// body...
 	// 	socket.send(JSON.stringify(new Date()), function() {  })
 	// }, 5000);
 
+	const ip = request.connection.remoteAddress;
+	console.log('connection open: ' + ip );
+	
 
 	socket.on('message', function (message) {
 		// body...
@@ -35,14 +48,25 @@ wss.on('connection', function (socket) {
 		var msg = {};
 		try {
     			msg = JSON.parse(message);
-  	} catch(e) {
-   		// var addr = ws._socket.address();
-    	msg = message;
-    	console.log('bad websocket message datatype:' + typeof message);
- 		}
+    	} catch(e) {
+	    	msg = message;
+	    	console.log('ERROR: Bad websocket message datatype:' + typeof message);
+	    	return;
+	 	}
 
 		console.log('msg.content:' + msg.content + '[' + typeof msg + ']');
 		console.log('msg[\'content\']:' + msg['content'] + '[' + typeof msg + ']');
+		// broadcast everyone else
+		wss.clients.forEach(function each(client) {
+			// body...
+			if (client !== socket && client.readyState === WebSocket.OPEN) {
+				var msgData = {
+					"content": msg.content,
+					"nickname": msg.nickname
+				}					
+				client.send(JSON.stringify(msgData));
+			}
+		});
 
 	});
 
