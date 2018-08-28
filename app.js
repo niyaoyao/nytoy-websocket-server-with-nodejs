@@ -5,7 +5,7 @@ var app = express();
 var port = 23333;
 
 
-app.use('/wsdemo', express.static(__dirname + '/wsdemo'));
+app.use('/app', express.static(__dirname + '/client'));
 
 app.get('/', function(req, res) {
 	res.send('<h1>Hello, Welcome to NY</h1>');
