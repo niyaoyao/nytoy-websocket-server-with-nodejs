@@ -8,6 +8,28 @@
 
   let socket;
   const messages = [];
+  const WS_PATH = "/ws/"; // Must mirror docs/nginx/cyberpi.tech.conf
+  const DEFAULT_WS_PORT = 23333; // Node backend listens here (proxied by Nginx)
+  const RECONNECT_BASE_DELAY = 800;
+  const RECONNECT_MAX_DELAY = 12000;
+  const PORT_PLAN = Object.freeze({
+    nginx: "80/443",
+    websocket: DEFAULT_WS_PORT,
+    futureApi: "3000-4000",
+  });
+  let reconnectAttempts = 0;
+  let reconnectTimer = null;
+
+  console.info(
+    "[nytoy]",
+    "WS via reverse proxy:",
+    `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}${WS_PATH}`,
+    "-> 127.0.0.1:" + DEFAULT_WS_PORT
+  );
+  console.info("[nytoy] 多服务端口规划:", PORT_PLAN);
+  console.info(
+    "[nytoy] forever/PM2 提醒: 生产环境务必配置 --minUptime/--spinSleepTime 或 pm2 save，避免进程崩溃后 WS 重连风暴。"
+  );
 
   const setStatus = (text, modifier) => {
     statusEl.textContent = text;
@@ -45,31 +67,50 @@
   };
 
   const resolveSocketUrl = () => {
-    if (window.NYTOY_WS_ENDPOINT) {
-      return window.NYTOY_WS_ENDPOINT;
+    const override = typeof window.NYTOY_WS_ENDPOINT === "string" ? window.NYTOY_WS_ENDPOINT.trim() : "";
+    if (override) {
+      return override;
     }
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const host = window.location.hostname;
-    const port = window.location.port || "23333";
-    return `${protocol}://${host}${port ? `:${port}` : ""}`;
+    const host = window.location.hostname || "127.0.0.1";
+    const currentPort = window.location.port;
+    const portSegment = currentPort
+      ? `:${currentPort}`
+      : protocol === "ws"
+      ? `:${DEFAULT_WS_PORT}`
+      : "";
+    return `${protocol}://${host}${portSegment}${WS_PATH}`;
+  };
+
+  const scheduleReconnect = () => {
+    reconnectAttempts += 1;
+    const delay = Math.min(RECONNECT_BASE_DELAY * reconnectAttempts, RECONNECT_MAX_DELAY);
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, delay);
+    setStatus(`reconnecting in ${Math.round(delay / 100) / 10}s…`, "status--error");
   };
 
   const connect = () => {
+    clearTimeout(reconnectTimer);
+    const target = resolveSocketUrl();
+    setStatus(`connecting ${target.startsWith("wss") ? "secure" : "ws"}…`);
     try {
-      socket = new WebSocket(resolveSocketUrl());
+      socket = new WebSocket(target);
     } catch (err) {
       console.error("WebSocket init failed", err);
       setStatus("connect error", "status--error");
+      scheduleReconnect();
       return;
     }
 
     socket.addEventListener("open", () => {
+      reconnectAttempts = 0;
       setStatus("connected", "status--connected");
     });
 
     socket.addEventListener("close", () => {
       setStatus("disconnected", "status--error");
-      setTimeout(connect, 1000);
+      scheduleReconnect();
     });
 
     socket.addEventListener("error", (err) => {
