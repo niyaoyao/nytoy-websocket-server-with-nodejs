@@ -1,79 +1,99 @@
 var express = require('express');
 var http = require('http');
 var WebSocket = require('ws');
+
 var app = express();
-var port = 23333;
+var port = process.env.PORT || 23333;
 
-
+// 静态文件
 app.use('/chatroom', express.static(__dirname + '/client'));
 
 app.get('/', function(req, res) {
-	res.send('<h1>Hello, Welcome to NY</h1>');
+    res.send('<h1>Hello, Welcome to NY</h1>');
 });
 
-// var server = app.listen(port, function(){
-// 	console.log('http://%s:%s', server.address().address , server.address().port);
-// });
+// 创建 HTTP + WS 共用服务器
 var server = http.createServer(app);
-server.listen(port);
-console.log('server start');
+server.listen(port, () => {
+    console.log('Server started on port ' + port);
+});
 
-var wss = new WebSocket.Server({server: server});
+// 创建 WebSocket server
+var wss = new WebSocket.Server({ server });
 
-wss.broadcast = function broadcast(data) {
-	// body...
-	wss.cliens.forEach(function each(client) {
-		// body...
-		if (client.readyState === WebSocket.OPEN ) {
-			client.send(JSON.stringify(data));
-		}
-	});
+// WebSocket 广播
+wss.broadcast = function(data, excludeSocket = null) {
+    wss.clients.forEach(client => {
+        if (client !== excludeSocket && client.readyState === WebSocket.OPEN) {
+            try {
+                client.send(JSON.stringify(data));
+            } catch (err) {
+                console.error('Broadcast error:', err);
+            }
+        }
+    });
+};
+
+// 心跳检测，防掉线（30 秒）
+function heartbeat() {
+    this.isAlive = true;
 }
 
-wss.on('connection', function (socket, request) {
-	// body...
-	// var id = setInterval(function () {
-	// 	// body...
-	// 	socket.send(JSON.stringify(new Date()), function() {  })
-	// }, 5000);
+const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach(ws => {
+        if (ws.isAlive === false) {
+            console.log('Terminating inactive client');
+            return ws.terminate();
+        }
+        ws.isAlive = false;
+        ws.ping();
+    });
+}, 30000);
 
-	const ip = request.connection.remoteAddress;
-	console.log('connection open: ' + ip );
+// WebSocket 连接事件
+wss.on('connection', function(socket, request) {
+    // 标记连接存活
+    socket.isAlive = true;
+    socket.on('pong', heartbeat);
 
+    // 获取客户端真实 IP
+    const ip = request.headers['x-forwarded-for'] || request.socket.remoteAddress;
+    console.log('WS connection from:', ip);
 
-	socket.on('message', function (message) {
-		// body...
-		console.log('recieve:' + message + '[' + typeof message + ']');
+    socket.on('message', function(message) {
+        console.log('Received:', message);
 
-		var msg = {};
-		try {
-    			msg = JSON.parse(message);
-    	} catch(e) {
-	    	msg = message;
-	    	console.log('ERROR: Bad websocket message datatype:' + typeof message);
-	    	return;
-	 	}
+        let msg;
+        try {
+            msg = JSON.parse(message);
+        } catch (e) {
+            console.error('Invalid JSON message:', e);
+            return;
+        }
 
-		console.log('msg.content:' + msg.content + '[' + typeof msg + ']');
-		console.log('msg[\'content\']:' + msg['content'] + '[' + typeof msg + ']');
-		// broadcast everyone else
-		wss.clients.forEach(function each(client) {
-			// body...
-			if (client !== socket && client.readyState === WebSocket.OPEN) {
-				var msgData = {
-					"content": msg.content,
-					"nickname": msg.nickname
-				}
-				client.send(JSON.stringify(msgData));
-			}
-		});
+        const msgData = {
+            content: msg.content,
+            nickname: msg.nickname
+        };
 
-	});
+        // 广播给其他客户端
+        wss.broadcast(msgData, socket);
+    });
 
+    socket.on('close', function() {
+        console.log('Client disconnected:', ip);
+    });
 
-	socket.on('close', function () {
-		// body...
-		console.log('connection close');
-		// clearInterval(id);
-	});
+    socket.on('error', function(err) {
+        console.error('Socket error:', err);
+    });
+});
+
+// 防止 Node 崩溃
+process.on('uncaughtException', err => {
+    console.error('Unhandled Exception:', err);
+});
+
+process.on('unhandledRejection', err => {
+    console.error('Unhandled Rejection:', err);
 });
