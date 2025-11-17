@@ -1,43 +1,28 @@
-# nytoy-websocket-server-with-nodejs
+## nytoy-websocket-server-with-nodejs
 
-A simple WebSocket chat server written with Node.js + `ws`. The repository contains two parts:
+Real-time chat server built with Node.js/Express + `ws`, paired with a static HTML client inside `client/`. This guide describes how to deploy it on CentOS with **Nginx reverse-proxy + HTTPS/WSS** and manage the Node service via **PM2**.
 
-- `app.js` – Express + WebSocket server that listens on port `23333`.
-- `client/` – pre-built static assets for the chat UI.
+---
 
-The sections below cover both local usage and a full CentOS + Nginx deployment.
+## 1. Prerequisites
 
-## Local Installation & Run
+- CentOS 7/8 host with root (or sudo) access.
+- Node.js ≥ 16.x (`curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash - && sudo yum install -y nodejs`).
+- Nginx installed (`sudo yum install -y nginx`) and running.
+- Certbot certificates ready for `cyberpi.tech` / `www.cyberpi.tech` (Let’s Encrypt).
+- PM2 (`sudo npm install -g pm2`).
 
-```bash
-npm install
-node app.js
-```
-
-Visit `http://localhost:23333/chatroom` to open the UI (the page connects to the same host on port `23333` via WebSocket).
-
-## Deploying to CentOS with Nginx
-
-The following walkthrough assumes you are using a CentOS 7/8 host with root privileges, SELinux enabled, and HTTPS certificates managed by Certbot.
-
-### 1. Prepare the host
+Optional utilities:
 
 ```bash
-sudo yum update -y
-sudo yum install -y epel-release git nginx
-curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
-sudo yum install -y nodejs
+sudo yum install -y git tar
 ```
 
-Optionally install a process manager:
+---
 
-```bash
-sudo npm install -g pm2
-```
+## 2. Deploy the code
 
-or plan to use `systemd` as shown later.
-
-### 2. Fetch the project
+### 2.1. Fetch via Git
 
 ```bash
 cd /opt
@@ -47,93 +32,177 @@ cd nytoy-websocket-server-with-nodejs
 npm install --production
 ```
 
-### 3. Keep the server alive (systemd example)
+### 2.2. Or upload a tarball with `scp`
 
 ```bash
-cat <<'EOF' | sudo tee /etc/systemd/system/nytoy-chat.service
-[Unit]
-Description=NYToy WebSocket Chat
-After=network.target
+# local machine
+tar czf nytoy-chat.tar.gz nytoy-websocket-server-with-nodejs
+scp nytoy-chat.tar.gz user@SERVER_IP:/tmp/
 
-[Service]
-Type=simple
-WorkingDirectory=/opt/nytoy-websocket-server-with-nodejs
-ExecStart=/usr/bin/node /opt/nytoy-websocket-server-with-nodejs/app.js
-Restart=on-failure
-Environment=NODE_ENV=production
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now nytoy-chat
-sudo systemctl status nytoy-chat --no-pager
+# server
+sudo mkdir -p /opt/nytoy-websocket-server-with-nodejs
+sudo tar xzf /tmp/nytoy-chat.tar.gz -C /opt/ --strip-components=1
+sudo chown -R $USER:$USER /opt/nytoy-websocket-server-with-nodejs
+cd /opt/nytoy-websocket-server-with-nodejs
+npm install --production
 ```
 
-If you prefer PM2:
-
-```bash
-pm2 start app.js --name nytoy-chat
-pm2 save
-pm2 startup systemd
-```
-
-### 4. Open the firewall
-
-```bash
-sudo firewall-cmd --permanent --add-service=http
-sudo firewall-cmd --permanent --add-service=https
-sudo firewall-cmd --permanent --add-port=23333/tcp
-sudo firewall-cmd --reload
-```
-
-### 5. Place the front-end files
-
-The UI is already pre-built under `client/`. Copy (or rsync) it to the directory served by Nginx:
+Sync the static assets to the directory served by Nginx:
 
 ```bash
 sudo mkdir -p /usr/share/nginx/html/chatroom
 sudo rsync -av --delete client/ /usr/share/nginx/html/chatroom/
 ```
 
-Re-run the `rsync` command whenever you customize the UI.
+---
 
-### 6. Configure Nginx
-
-An example configuration matching `cyberpi.tech` is available at [`docs/nginx/cyberpi.tech.conf`](docs/nginx/cyberpi.tech.conf). Copy it (or merge it) into `/etc/nginx/conf.d/`:
+## 3. Run the WebSocket backend with PM2
 
 ```bash
-sudo mkdir -p /etc/nginx/conf.d
-sudo cp docs/nginx/cyberpi.tech.conf /etc/nginx/conf.d/cyberpi.tech.conf
+cd /opt/nytoy-websocket-server-with-nodejs
+pm2 start app.js --name nytoy-chat
+pm2 save           # persist process list
+pm2 startup systemd
 ```
 
-Key items in the config:
+Useful commands:
 
-- HTTP requests are redirected to HTTPS.
-- HTTPS vhost terminates TLS using the Certbot-provisioned certificates.
-- Static files under `/usr/share/nginx/html/chatroom/` are exposed at `https://www.cyberpi.tech/chatroom/`.
-- Web requests under `/chatroom/` fall back to `index.html` so the SPA router works.
+```bash
+pm2 status
+pm2 logs nytoy-chat
+pm2 restart nytoy-chat
+pm2 delete nytoy-chat
+```
 
-After editing Nginx files, validate and reload:
+This ensures the server auto-restarts on crash and on reboot (`pm2 startup` installs a systemd unit that reloads the saved process list).
+
+---
+
+## 4. Nginx configuration (HTTPS + WSS reverse proxy)
+
+Create `/etc/nginx/conf.d/cyberpi.tech.conf` with the following contents:
+
+```nginx
+server {
+    if ($host = www.cyberpi.tech) {
+        return 301 https://$host$request_uri;
+    }
+
+    listen 80;
+    server_name cyberpi.tech www.cyberpi.tech;
+
+    # 自动重定向 HTTP 到 HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name cyberpi.tech www.cyberpi.tech;
+
+    ssl_certificate /etc/letsencrypt/live/cyberpi.tech/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cyberpi.tech/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # ========== 静态文件 ==========
+    root /usr/share/nginx/html;
+    index index.html index.htm;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    location /quickdraw/ {
+        root /usr/share/nginx/html;
+        try_files $uri $uri/ /quickdraw/index.html;
+    }
+
+    location /chatbot/ {
+        root /usr/share/nginx/html;
+        try_files $uri $uri/ /chatbot/index.html;
+    }
+
+    # ========== WebSocket 反向代理 ==========
+    location /ws/ {
+        proxy_pass http://127.0.0.1:23333;  # Node.js WebSocket 服务
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
+```
+
+Then reload Nginx:
 
 ```bash
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### 7. Validate
+### Front-end WSS endpoint
 
-1. Browse to `https://www.cyberpi.tech/chatroom/` and ensure the UI loads via HTTPS.
-2. Confirm the WebSocket connection succeeds (the browser console should show a connected socket to `ws://<host>:23333` or `wss://` if you update the client).
-3. Inspect the systemd unit logs if the WebSocket server is unreachable:
+When serving via HTTPS, browsers must use `wss://` URLs. The provided front-end auto-detects protocol/host, but for reverse-proxy mode you can set:
 
-```bash
-sudo journalctl -u nytoy-chat -f
+```html
+<script>
+  window.NYTOY_WS_ENDPOINT = "wss://www.cyberpi.tech/ws/";
+</script>
 ```
 
-### 8. Maintenance tips
+Drop this before `chat.js` (or bundle) so clients connect through Nginx, not directly to port `23333`.
 
-- Pull updates: `git pull --ff-only` followed by `sudo systemctl restart nytoy-chat`.
-- Renew certificates with Certbot (already configured in the sample Nginx file).
-- Rotate logs or set up PM2/systemd log forwarding as needed.
+---
+
+## 5. Port planning recommendations
+
+| Service                  | Suggested Port | Notes                                   |
+|--------------------------|----------------|-----------------------------------------|
+| Nginx HTTP/HTTPS         | 80 / 443       | Public entry point                      |
+| WebSocket backend        | 23333          | Internal-only (proxied via `/ws/`)      |
+| Future REST API          | 3000/4000      | Keep separate from WS for clarity       |
+| Background workers       | 5000+          | Use firewall rules to limit exposure    |
+
+Guidelines:
+
+- Keep internal services bound to `127.0.0.1` unless they must be public.
+- Use Nginx (or Traefik) as the only internet-facing layer; map each app to a distinct URI prefix.
+- Document port usage in infrastructure notes to avoid conflicts when more services are added.
+
+---
+
+## 6. WebSocket stability checklist
+
+1. **Process management**: PM2 (as configured) restarts crashed processes automatically.
+2. **Health monitoring**: Use `pm2 monit` or integrate with a metrics agent (Node exporter, etc.).
+3. **Timeouts**: The Nginx config extends `proxy_read_timeout` and `proxy_send_timeout` to avoid idle disconnects.
+4. **Keep-alive (optional)**: Emit ping/pong frames from the server every 30–60 seconds if clients sit idle for hours.
+5. **Backpressure handling**: The server broadcasts immediately; if expecting heavy traffic, queue messages or apply rate limiting at the app layer.
+6. **Logging**: Redirect PM2 logs to files or services like CloudWatch/ELK for debugging connection drops.
+7. **Graceful deploys**: Use `pm2 reload nytoy-chat` for zero-downtime restarts.
+
+---
+
+## 7. Verification steps
+
+1. `pm2 status` shows `nytoy-chat` online.
+2. `curl -I https://www.cyberpi.tech/chatroom/` returns `200`.
+3. Browser opens `https://www.cyberpi.tech/chatroom/`, DevTools console shows `wss://www.cyberpi.tech/ws/` connected.
+4. Messages typed in different browsers appear instantly.
+
+---
+
+## 8. Maintenance tips
+
+- Pull updates: `git pull --ff-only` and `pm2 restart nytoy-chat`.
+- Renew certificates: `sudo certbot renew` (with `--nginx` or cron).
+- Backup configs: `/etc/nginx/conf.d/cyberpi.tech.conf`, `/opt/nytoy-websocket-server-with-nodejs`.
+- Periodically rotate PM2 logs: `pm2 flush`.
+
+Happy chatting!
