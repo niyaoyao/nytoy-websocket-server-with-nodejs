@@ -19,6 +19,79 @@
   });
   let reconnectAttempts = 0;
   let reconnectTimer = null;
+  const NotificationBridge = (() => {
+    const supported = "Notification" in window;
+    let permissionState = supported ? Notification.permission : "denied";
+    let pendingRequest = null;
+
+    const requestPermission = () => {
+      if (!supported) {
+        return Promise.resolve("denied");
+      }
+      if (permissionState === "granted" || permissionState === "denied") {
+        return Promise.resolve(permissionState);
+      }
+      if (!pendingRequest) {
+        pendingRequest = Notification.requestPermission()
+          .then((result) => {
+            permissionState = result;
+            pendingRequest = null;
+            return result;
+          })
+          .catch((err) => {
+            console.warn("[nytoy] 系统通知权限申请失败", err);
+            permissionState = "denied";
+            pendingRequest = null;
+            return "denied";
+          });
+      }
+      return pendingRequest;
+    };
+
+    const notify = (title, body) => {
+      if (!supported) {
+        return;
+      }
+      const spawnNotification = () => {
+        try {
+          new Notification(title, {
+            body,
+            tag: "nytoy-chat",
+            renotify: true,
+          });
+        } catch (error) {
+          console.warn("[nytoy] 系统通知弹出失败", error);
+        }
+      };
+
+      if (permissionState === "granted") {
+        spawnNotification();
+        return;
+      }
+
+      if (permissionState === "default") {
+        requestPermission().then((result) => {
+          if (result === "granted") {
+            spawnNotification();
+          }
+        });
+      }
+    };
+
+    return {
+      isSupported: () => supported,
+      requestPermission,
+      notify,
+    };
+  })();
+  const shouldNotify = () => {
+    if (!NotificationBridge.isSupported()) {
+      return false;
+    }
+    const hidden = typeof document.hidden === "boolean" ? document.hidden : false;
+    const hasFocus = typeof document.hasFocus === "function" ? document.hasFocus() : true;
+    return hidden || !hasFocus;
+  };
 
   console.info(
     "[nytoy]",
@@ -127,6 +200,9 @@
             content: data.content,
             timestamp: Date.now(),
           });
+          if (shouldNotify()) {
+            NotificationBridge.notify(`${data.nickname || "匿名"} 发来新消息`, data.content);
+          }
         }
       } catch (error) {
         console.warn("Bad message payload", event.data);
@@ -150,4 +226,7 @@
 
   setStatus("connecting…");
   connect();
+  if (NotificationBridge.isSupported()) {
+    NotificationBridge.requestPermission();
+  }
 })();
