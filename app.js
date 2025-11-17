@@ -5,7 +5,7 @@ var app = express();
 var port = 23333;
 
 
-app.use('/app', express.static(__dirname + '/client'));
+app.use('/chatroom', express.static(__dirname + '/client'));
 
 app.get('/', function(req, res) {
 	res.send('<h1>Hello, Welcome to NY</h1>');
@@ -39,7 +39,7 @@ wss.on('connection', function (socket, request) {
 
 	const ip = request.connection.remoteAddress;
 	console.log('connection open: ' + ip );
-	
+
 
 	socket.on('message', function (message) {
 		// body...
@@ -63,7 +63,7 @@ wss.on('connection', function (socket, request) {
 				var msgData = {
 					"content": msg.content,
 					"nickname": msg.nickname
-				}					
+				}
 				client.send(JSON.stringify(msgData));
 			}
 		});

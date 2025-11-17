@@ -1,1 +1,140 @@
-<!DOCTYPE html><html lang="en"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <meta http-equiv="X-UA-Compatible" content="ie=edge"> <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0;" name="viewport"> <link rel="manifest" href="/app/manifest.35e614ac.js"> <link rel="shortcut icon" href="/app/favicon.7e383b4b.ico"> <link rel="apple-touch-icon" href="/app/touch-icon-iphone.1a281482.png"> <link rel="apple-touch-icon" sizes="76x76" href="/app/touch-icon-ipad.bbde70e2.png"> <link rel="apple-touch-icon" sizes="120x120" href="/app/touch-icon-iphone-retina.00a1d95b.png"> <link rel="apple-touch-icon" sizes="152x152" href="/app/touch-icon-ipad-retina.50b65c6d.png"> <title>摸鱼划水鸭</title> <style>body,html{font-family:Georgia,Cambria,serif;font-size:14px;color:#333}.icon{width:1em;height:1em;vertical-align:-.15em;fill:currentColor;overflow:hidden}.clock{position:absolute;top:1rem;right:1rem;color:#333;background:#fff;line-height:2rem;height:2rem;font-size:1rem;border-radius:1rem;padding:0 .5rem;min-width:5rem}</style> <script>window.onload=function(){document.addEventListener("touchstart",function(e){e.touches.length>1&&e.preventDefault()});var e=0;document.addEventListener("touchend",function(t){var n=(new Date).getTime();n-e<=300&&t.preventDefault(),e=n},!1),document.addEventListener("gesturestart",function(e){e.preventDefault()})};</script> <link rel="stylesheet" href="/app/src.27cdebb1.css"></head> <body> <div id="container"></div> <div class="clock" id="clock"> </div> <script src="/app/src.a1f3cbc8.js"></script> </body> </html>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="theme-color" content="#050b18">
+  <link rel="manifest" href="./manifest.35e614ac.js">
+  <link rel="shortcut icon" href="./favicon.7e383b4b.ico">
+  <link rel="apple-touch-icon" href="./touch-icon-iphone.1a281482.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="./touch-icon-ipad.bbde70e2.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="./touch-icon-iphone-retina.00a1d95b.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="./touch-icon-ipad-retina.50b65c6d.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500&display=swap" rel="stylesheet">
+  <title>摸鱼划水鸭 · 聊天室</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-weight: 400;
+      line-height: 1.5;
+      background-color: #050b18;
+      color: #e7ecff;
+      font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    .chat-shell {
+      position: relative;
+      padding: 2rem clamp(1rem, 3vw, 3rem) 3rem;
+      min-height: 100%;
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .chat-shell::before,
+    .chat-shell::after {
+      content: "";
+      position: absolute;
+      width: 40vw;
+      height: 40vw;
+      border-radius: 50%;
+      opacity: 0.45;
+      filter: blur(60px);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .chat-shell::before {
+      top: -10vw;
+      left: -5vw;
+      background: linear-gradient(135deg, #7f5af0, #2cb67d);
+    }
+
+    .chat-shell::after {
+      bottom: -20vw;
+      right: -10vw;
+      background: linear-gradient(135deg, #00f5a0, #00d9f5);
+    }
+
+    .chat-shell__app {
+      width: 100%;
+      position: relative;
+      z-index: 1;
+    }
+
+    .chat-shell__app > div {
+      width: 100%;
+    }
+
+    .clock {
+      position: fixed;
+      top: 1.25rem;
+      right: 1.5rem;
+      min-width: 6rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(5, 8, 22, 0.85);
+      color: #f3f7ff;
+      font-size: 0.95rem;
+      box-shadow: 0 15px 35px rgba(2, 6, 23, 0.55);
+      letter-spacing: 0.08em;
+    }
+
+    @media (max-width: 640px) {
+      .chat-shell {
+        padding: 1.5rem 1rem 2rem;
+      }
+
+      .clock {
+        position: static;
+        margin: 0 0 1rem auto;
+        display: inline-flex;
+        justify-content: center;
+      }
+    }
+  </style>
+  <script>
+    window.onload = function () {
+      document.addEventListener("touchstart", function (e) {
+        e.touches.length > 1 && e.preventDefault();
+      });
+      var lastTouchEnd = 0;
+      document.addEventListener("touchend", function (e) {
+        var now = new Date().getTime();
+        now - lastTouchEnd <= 300 && e.preventDefault();
+        lastTouchEnd = now;
+      }, false);
+      document.addEventListener("gesturestart", function (e) {
+        e.preventDefault();
+      });
+    };
+  </script>
+  <link rel="stylesheet" href="./src.27cdebb1.css">
+</head>
+<body>
+  <div class="chat-shell">
+    <div id="container" class="chat-shell__app" role="main" aria-live="polite"></div>
+    <div class="clock" id="clock"></div>
+  </div>
+  <script src="./src.a1f3cbc8.js"></script>
+</body>
+</html>
