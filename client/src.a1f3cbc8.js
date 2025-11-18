@@ -25,7 +25,7 @@
       </div>
       <div class="_textFeildRow_4nm0s_61">
         <div class="_textFeildWrapper_17dbd_1">
-          <input id="message" class="_textFeild_17dbd_1" type="text" placeholder="请输入消息内容" maxlength="200"/>
+          <input id="message" class="_textFeild_17dbd_1" type="text" placeholder="请输入消息内容"/>
         </div>
       </div>
       <div class="_buttonCommon_b0y0d_1">
