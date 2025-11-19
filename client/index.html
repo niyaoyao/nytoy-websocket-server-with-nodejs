@@ -29,9 +29,13 @@
         </label>
         <label class="field field--grow">
           <span>内容</span>
-          <input id="message" type="text" placeholder="说点什么…" required>
+          <input id="message" type="text" placeholder="说点什么…（支持图片）" required>
         </label>
-        <button type="submit" class="send-btn">发送</button>
+        <div class="composer__actions">
+          <button type="button" id="imageButton" class="ghost-btn" title="选择图片或粘贴图片发送">发送图片</button>
+          <button type="submit" class="send-btn">发送</button>
+        </div>
+        <input id="imagePicker" type="file" accept="image/*" hidden>
       </form>
     </section>
   </main>
@@ -42,7 +46,7 @@
         <span class="message__nickname"></span>
         <time class="message__time"></time>
       </div>
-      <p class="message__content"></p>
+      <div class="message__content"></div>
     </li>
   </template>
 

@@ -120,6 +120,18 @@ body {
   margin: 0;
   color: #e7ebff;
   word-break: break-word;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.message__image {
+  max-width: min(360px, 100%);
+  border-radius: 12px;
+  display: block;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.6);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 #chatForm {
@@ -127,6 +139,14 @@ body {
   gap: 0.75rem;
   align-items: flex-end;
   flex-wrap: wrap;
+}
+
+.composer__actions {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .field {
@@ -181,6 +201,22 @@ body {
   cursor: not-allowed;
 }
 
+.ghost-btn {
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  font-size: 0.95rem;
+  border: 1px dashed rgba(255, 255, 255, 0.4);
+  color: #c5cce8;
+  background: rgba(4, 10, 35, 0.4);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.ghost-btn:hover {
+  border-color: rgba(125, 225, 255, 0.8);
+  color: #7de1ff;
+}
+
 @media (max-width: 640px) {
   body {
     padding: 1rem;
@@ -195,7 +231,15 @@ body {
     flex-direction: column;
   }
 
+  .composer__actions {
+    justify-content: flex-start;
+  }
+
   .send-btn {
+    width: 100%;
+  }
+
+  .ghost-btn {
     width: 100%;
   }
 }

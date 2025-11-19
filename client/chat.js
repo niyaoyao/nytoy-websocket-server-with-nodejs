@@ -5,6 +5,8 @@
   const form = document.getElementById("chatForm");
   const nicknameInput = document.getElementById("nickname");
   const messageInput = document.getElementById("message");
+  const imageButton = document.getElementById("imageButton");
+  const imageInput = document.getElementById("imagePicker");
 
   let socket;
   const messages = [];
@@ -112,6 +114,8 @@
     }
   };
 
+  const isSocketReady = () => socket && socket.readyState === WebSocket.OPEN;
+
   const renderMessages = () => {
     listEl.innerHTML = "";
     const fragment = document.createDocumentFragment();
@@ -119,7 +123,17 @@
       const node = template.content.firstElementChild.cloneNode(true);
       node.querySelector(".message__nickname").textContent = msg.nickname || "匿名";
       node.querySelector(".message__time").textContent = new Date(msg.timestamp).toLocaleTimeString();
-      node.querySelector(".message__content").textContent = msg.content;
+      const contentEl = node.querySelector(".message__content");
+      contentEl.textContent = "";
+      if (msg.type === "image" && typeof msg.content === "string") {
+        const img = document.createElement("img");
+        img.src = msg.content;
+        img.alt = `${msg.nickname || "匿名"} 的图片消息`;
+        img.className = "message__image";
+        contentEl.appendChild(img);
+      } else {
+        contentEl.textContent = msg.content;
+      }
       if (msg.self) {
         node.classList.add("message--me");
       }
@@ -133,10 +147,66 @@
     messages.push({
       nickname: payload.nickname,
       content: payload.content,
+      type: payload.type || "text",
       timestamp: payload.timestamp || Date.now(),
       self: Boolean(payload.self),
     });
     renderMessages();
+  };
+
+  const sendPayload = (payload) => {
+    if (!payload.nickname || !payload.content || !isSocketReady()) {
+      return false;
+    }
+    try {
+      socket.send(JSON.stringify(payload));
+      appendMessage({ ...payload, self: true, timestamp: Date.now() });
+    } catch (error) {
+      console.warn("发送消息失败", error);
+      return false;
+    }
+    return true;
+  };
+
+  const sendTextMessage = () => {
+    const nickname = nicknameInput.value.trim();
+    const content = messageInput.value.trim();
+    if (!nickname) {
+      nicknameInput.focus();
+      return;
+    }
+    if (!content) {
+      return;
+    }
+    if (sendPayload({ nickname, content, type: "text" })) {
+      messageInput.value = "";
+      messageInput.focus();
+    }
+  };
+
+  const handleImageFile = (file) => {
+    const nickname = nicknameInput.value.trim();
+    if (!nickname) {
+      nicknameInput.focus();
+      return;
+    }
+    if (!file || !file.type || !file.type.startsWith("image/")) {
+      return;
+    }
+    if (!isSocketReady()) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        sendPayload({ nickname, content: result, type: "image" });
+      }
+    };
+    reader.onerror = () => {
+      console.warn("读取图片失败");
+    };
+    reader.readAsDataURL(file);
   };
 
   const resolveSocketUrl = () => {
@@ -195,13 +265,16 @@
       try {
         const data = JSON.parse(event.data);
         if (data && data.content) {
+          const messageType = data.type === "image" ? "image" : "text";
           appendMessage({
             nickname: data.nickname || "匿名",
             content: data.content,
-            timestamp: Date.now(),
+            type: messageType,
+            timestamp: data.timestamp || Date.now(),
           });
           if (shouldNotify()) {
-            NotificationBridge.notify(`${data.nickname || "匿名"} 发来新消息`, data.content);
+            const summary = messageType === "image" ? "[图片]" : data.content;
+            NotificationBridge.notify(`${data.nickname || "匿名"} 发来新消息`, summary);
           }
         }
       } catch (error) {
@@ -212,16 +285,43 @@
 
   form.addEventListener("submit", (evt) => {
     evt.preventDefault();
-    const nickname = nicknameInput.value.trim();
-    const content = messageInput.value.trim();
-    if (!nickname || !content || !socket || socket.readyState !== WebSocket.OPEN) {
+    sendTextMessage();
+  });
+
+  if (imageButton && imageInput) {
+    imageButton.addEventListener("click", () => {
+      if (!nicknameInput.value.trim()) {
+        nicknameInput.focus();
+        return;
+      }
+      imageInput.click();
+    });
+
+    imageInput.addEventListener("change", (evt) => {
+      const { files } = evt.target;
+      if (files && files[0]) {
+        handleImageFile(files[0]);
+      }
+      evt.target.value = "";
+    });
+  }
+
+  document.addEventListener("paste", (evt) => {
+    const items = evt.clipboardData && evt.clipboardData.items;
+    if (!items) {
       return;
     }
-    const payload = { nickname, content };
-    socket.send(JSON.stringify(payload));
-    appendMessage({ ...payload, self: true });
-    messageInput.value = "";
-    messageInput.focus();
+    const imageItem = Array.from(items).find(
+      (item) => item.kind === "file" && typeof item.type === "string" && item.type.startsWith("image/")
+    );
+    if (!imageItem) {
+      return;
+    }
+    const file = imageItem.getAsFile();
+    if (file) {
+      evt.preventDefault();
+      handleImageFile(file);
+    }
   });
 
   setStatus("connecting…");

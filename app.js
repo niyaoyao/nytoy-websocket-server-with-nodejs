@@ -73,7 +73,8 @@ wss.on('connection', function(socket, request) {
 
         const msgData = {
             content: msg.content,
-            nickname: msg.nickname
+            nickname: msg.nickname,
+            type: msg.type === 'image' ? 'image' : 'text'
         };
 
         // 广播给其他客户端
