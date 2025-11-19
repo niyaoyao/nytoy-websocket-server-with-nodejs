@@ -19,8 +19,8 @@ Real-time chat stack built from a lightweight static client (`client/`) and a No
 1. **OS**: CentOS 7/8 or similar with sudo access.
 2. **Node.js ≥ 16**: `curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash - && sudo yum install -y nodejs`
 3. **Nginx + Certbot**: `sudo yum install -y nginx certbot`, certificates ready for `cyberpi.tech` and `www.cyberpi.tech`.
-4. **PM2 (recommended) or forever**  
-   - `sudo npm install -g pm2`  
+4. **PM2 (recommended) or forever**
+   - `sudo npm install -g pm2`
    - If you prefer `forever`, remember to pass `--minUptime 10000 --spinSleepTime 5000` to avoid restart storms after crashes.
 
 ---
@@ -177,7 +177,32 @@ Expect to see logs similar to:
 
 ---
 
-## 7. Port planning
+## 7. AI bot via OpenRouter
+
+The chatroom can now summon an AI assistant (same OpenRouter workflow used in `client/aibot/`). Configure these environment variables before starting `app.js`:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` | _(unset)_ | Required. Your OpenRouter API key. |
+| `OPENROUTER_MODEL` | `deepseek/deepseek-r1:free` | Optional. Any model slug supported by OpenRouter. |
+| `CHAT_AI_NICKNAME` | `摸鱼AI` | Display name for AI replies inside the chat. |
+| `CHAT_AI_PROMPT` | Friendly CN prompt | System prompt used for every request. |
+| `OPENROUTER_SITE_URL` | `https://nytoy-chatroom.local` | Sent as `HTTP-Referer` header per OpenRouter policy. |
+| `OPENROUTER_SITE_NAME` | `nytoy-chatroom` | Sent as `X-Title`. |
+
+Usage (front-end):
+
+1. Type your question in the regular input field.
+2. Either click **“问摸鱼AI”** or include `@bot` anywhere in the message. The backend auto-detects the flag and fetches a reply from OpenRouter.
+3. Everyone in the room will receive the AI response, highlighted with a blue frame.
+
+If the API key is missing or OpenRouter returns an error, the requester receives a private system message explaining the failure.
+
+Restart the PM2/forever process after exporting new env vars to apply the configuration.
+
+---
+
+## 8. Port planning
 
 | Component | Port(s) | Notes |
 | --- | --- | --- |
@@ -190,7 +215,7 @@ Document this table for future infrastructure work to avoid conflicts.
 
 ---
 
-## 8. WebSocket reliability checklist
+## 9. WebSocket reliability checklist
 
 1. **Reverse proxy timeouts**: `proxy_read_timeout`/`proxy_send_timeout` set to 3600 s to prevent idle disconnects.
 2. **Server heartbeat**: `app.js` pings every 30 s and terminates dead clients.

@@ -217,6 +217,23 @@ body {
   color: #7de1ff;
 }
 
+.ghost-btn--primary {
+  border-style: solid;
+  border-color: rgba(125, 225, 255, 0.9);
+  background: rgba(79, 102, 255, 0.15);
+  color: #9cd7ff;
+}
+
+.ghost-btn--primary:hover {
+  color: #d0ecff;
+  border-color: rgba(180, 236, 255, 0.95);
+}
+
+.message--pending .message__content {
+  opacity: 0.75;
+  font-style: italic;
+}
+
 @media (max-width: 640px) {
   body {
     padding: 1rem;

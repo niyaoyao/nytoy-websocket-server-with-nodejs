@@ -1,0 +1,59 @@
+.model-selector {
+  position: relative;
+  display: inline-block;
+  max-width: 150px;
+  margin-right: 10px;
+}
+
+.model-selector-button {
+  width: 100%;
+  max-width: 150px;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid #ccc;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-dropdown {
+  position: absolute;
+  bottom: 110%; /* 👈 改为从按钮上方开始 */
+  left: 0;
+  width: max-content;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(10px); /* 👈 从下往上浮现 */
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+
+.model-dropdown.open {
+  max-height: 500px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.model-option {
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.model-option:hover {
+  background: #f0f0f0;
+}
+
+.model-option.selected {
+  background: #e6f7ff;
+  font-weight: bold;
+}

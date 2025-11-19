@@ -7,6 +7,11 @@
   const messageInput = document.getElementById("message");
   const imageButton = document.getElementById("imageButton");
   const imageInput = document.getElementById("imagePicker");
+  const aiButton = document.getElementById("aiButton");
+  const AI_KEYWORD = "@bot";
+  const AI_NICKNAME = "bot";
+  const AI_PLACEHOLDER_TEXT = "AI 思考中…";
+  const pendingAiReplies = new Map();
 
   let socket;
   const messages = [];
@@ -94,6 +99,40 @@
     const hasFocus = typeof document.hasFocus === "function" ? document.hasFocus() : true;
     return hidden || !hasFocus;
   };
+  const createAiRequestId = () => `ai-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const containsAiKeyword = (text) => typeof text === "string" && text.toLowerCase().includes(AI_KEYWORD);
+  const spawnAiPlaceholder = (requestId, nickname = AI_NICKNAME) => {
+    if (!requestId) {
+      return;
+    }
+    const placeholder = {
+      id: requestId,
+      nickname,
+      content: AI_PLACEHOLDER_TEXT,
+      type: "text",
+      timestamp: Date.now(),
+      self: false,
+      isBot: true,
+      pending: true,
+    };
+    pendingAiReplies.set(requestId, placeholder);
+    messages.push(placeholder);
+    renderMessages();
+  };
+  const resolveAiPlaceholder = (incoming) => {
+    const requestId = typeof incoming.aiRequestId === "string" ? incoming.aiRequestId : "";
+    if (!requestId || !pendingAiReplies.has(requestId)) {
+      return false;
+    }
+    const placeholder = pendingAiReplies.get(requestId);
+    placeholder.content = incoming.content;
+    placeholder.nickname = incoming.nickname || AI_NICKNAME;
+    placeholder.timestamp = incoming.timestamp || Date.now();
+    placeholder.pending = false;
+    pendingAiReplies.delete(requestId);
+    renderMessages();
+    return true;
+  };
 
   console.info(
     "[nytoy]",
@@ -137,6 +176,12 @@
       if (msg.self) {
         node.classList.add("message--me");
       }
+      if (msg.pending) {
+        node.classList.add("message--pending");
+        if (!contentEl.textContent) {
+          contentEl.textContent = AI_PLACEHOLDER_TEXT;
+        }
+      }
       fragment.appendChild(node);
     });
     listEl.appendChild(fragment);
@@ -145,11 +190,14 @@
 
   const appendMessage = (payload) => {
     messages.push({
+      id: payload.id || payload.aiRequestId || null,
       nickname: payload.nickname,
       content: payload.content,
       type: payload.type || "text",
       timestamp: payload.timestamp || Date.now(),
       self: Boolean(payload.self),
+      isBot: Boolean(payload.isBot),
+      pending: Boolean(payload.pending),
     });
     renderMessages();
   };
@@ -178,9 +226,19 @@
     if (!content) {
       return;
     }
-    if (sendPayload({ nickname, content, type: "text" })) {
+    const needsAi = containsAiKeyword(content);
+    const aiRequestId = needsAi ? createAiRequestId() : "";
+    const payload = { nickname, content, type: "text" };
+    if (needsAi) {
+      payload.ai = true;
+      payload.aiRequestId = aiRequestId;
+    }
+    if (sendPayload(payload)) {
       messageInput.value = "";
       messageInput.focus();
+      if (needsAi && aiRequestId) {
+        spawnAiPlaceholder(aiRequestId);
+      }
     }
   };
 
@@ -207,6 +265,26 @@
       console.warn("读取图片失败");
     };
     reader.readAsDataURL(file);
+  };
+
+  const sendAiQuestion = () => {
+    const nickname = nicknameInput.value.trim();
+    const content = messageInput.value.trim();
+    if (!nickname) {
+      nicknameInput.focus();
+      return;
+    }
+    if (!content) {
+      messageInput.focus();
+      return;
+    }
+    const aiRequestId = createAiRequestId();
+    const payload = { nickname, content, type: "text", ai: true, aiRequestId };
+    if (sendPayload(payload)) {
+      messageInput.value = "";
+      messageInput.focus();
+      spawnAiPlaceholder(aiRequestId);
+    }
   };
 
   const resolveSocketUrl = () => {
@@ -266,15 +344,28 @@
         const data = JSON.parse(event.data);
         if (data && data.content) {
           const messageType = data.type === "image" ? "image" : "text";
-          appendMessage({
-            nickname: data.nickname || "匿名",
-            content: data.content,
-            type: messageType,
-            timestamp: data.timestamp || Date.now(),
-          });
+          const botNickname = data.isBot ? data.nickname || AI_NICKNAME : data.nickname || "匿名";
+          const handledByPlaceholder =
+            data.isBot &&
+            resolveAiPlaceholder({
+              aiRequestId: data.aiRequestId,
+              content: data.content,
+              nickname: botNickname,
+              timestamp: data.timestamp,
+            });
+          if (!handledByPlaceholder) {
+            appendMessage({
+              nickname: botNickname,
+              content: data.content,
+              type: messageType,
+              timestamp: data.timestamp || Date.now(),
+              isBot: Boolean(data.isBot),
+              aiRequestId: data.aiRequestId,
+            });
+          }
           if (shouldNotify()) {
             const summary = messageType === "image" ? "[图片]" : data.content;
-            NotificationBridge.notify(`${data.nickname || "匿名"} 发来新消息`, summary);
+            NotificationBridge.notify(`${botNickname}${data.isBot ? "（AI）" : ""} 发来新消息`, summary);
           }
         }
       } catch (error) {
@@ -287,6 +378,12 @@
     evt.preventDefault();
     sendTextMessage();
   });
+
+  if (aiButton) {
+    aiButton.addEventListener("click", () => {
+      sendAiQuestion();
+    });
+  }
 
   if (imageButton && imageInput) {
     imageButton.addEventListener("click", () => {
